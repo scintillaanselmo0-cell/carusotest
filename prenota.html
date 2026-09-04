@@ -239,8 +239,8 @@ function renderApptForm(){
           I dati che inserisci (nome, telefono, dettagli dell'appuntamento) sono usati da <b>${esc(CFG.name)}</b>, titolare del trattamento, al solo scopo di gestire e confermare il tuo appuntamento. Non vengono ceduti a terzi né usati per marketing senza un tuo ulteriore consenso. Sono conservati per il tempo necessario alla gestione del servizio. Puoi chiederne in ogni momento accesso, rettifica o cancellazione contattando l'attività${CFG_phone()?`, anche via WhatsApp al ${esc(CFG_phone())}`:""}.
         </div>
 
-        <button class="cta" id="submit">Invia richiesta</button>
-        <p class="note">Riceverai conferma dall'attività. La richiesta non è ancora confermata.</p>
+        <button class="cta" id="submit">${SERVICE.price_cents ? "Vai al pagamento" : "Invia richiesta"}</button>
+        <p class="note">${SERVICE.price_cents ? "Pagamento sicuro con Stripe. L'appuntamento è confermato dopo il pagamento." : "Riceverai conferma dall'attività. La richiesta non è ancora confermata."}</p>
       </div>
       <div id="fullPanel" class="grp" style="display:none"></div>
     </div>`;
@@ -312,14 +312,32 @@ async function apptSubmit(){
   if(!/\d{6,}/.test(phone.replace(/\D/g,""))) return fail("Inserisci un numero di telefono valido.");
   if(!consent) return fail("Serve il consenso privacy per inviare la richiesta.");
 
-  const btn=$("#submit"); btn.disabled=true; btn.textContent="Invio…";
+  const btn=$("#submit"); btn.disabled=true; btn.textContent="Attendi…";
+
+  // servizio a pagamento -> Stripe Checkout (l'appuntamento nasce dopo il pagamento)
+  if(SERVICE.price_cents){
+    const { data, error } = await sb.functions.invoke("crea-checkout",{
+      body: { slug:CLIENT_SLUG, service_key:SERVICE_KEY, name, phone, date, time,
+              consent, notes: notes||null, return_url: location.href }
+    });
+    if(error){ btn.disabled=false; btn.textContent="Vai al pagamento"; return fail("Errore nel pagamento. Riprova o chiamaci."); }
+    if(!data || !data.ok){
+      btn.disabled=false; btn.textContent="Vai al pagamento";
+      const err = data && data.error ? data.error : "Impossibile avviare il pagamento.";
+      if(/disponibile|completo/i.test(err)){ fail(err+" — aggiorno gli orari."); apptRefreshSlots(); return; }
+      return fail(err);
+    }
+    window.location.href = data.url;   // va alla pagina di pagamento Stripe
+    return;
+  }
+
+  // servizio gratuito -> crea direttamente l'appuntamento
   const { data, error } = await sb.rpc("create_appointment",{
     p_slug: CLIENT_SLUG, p_service_key: SERVICE_KEY,
     p_name: name, p_phone: phone, p_date: date, p_time: time,
     p_consent: consent, p_notes: notes || null
   });
   btn.disabled=false; btn.textContent="Invia richiesta";
-
   if(error){ return fail("Si è verificato un errore. Riprova o chiamaci."); }
   if(!data || !data.ok){
     const err = data && data.error ? data.error : "Impossibile completare la prenotazione.";
