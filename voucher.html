@@ -55,6 +55,8 @@ body{font-family:var(--font); background:var(--dark); color:var(--ink);
 <div class="wrap" id="wrap"><div class="loading">Carico…</div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 const SUPABASE_URL      = "https://qorswaabqqcxpsmngbpo.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_xoKJtS9w_kv_dddgGl8Ycg_BC2UM0w6";
@@ -113,8 +115,34 @@ function render(v){
       ${used?`<div class="used">Voucher già utilizzato</div>`:""}
     </div>
     <div class="actions no-print">
-      <button class="btn primary" onclick="window.print()">Scarica PDF</button>
+      <button class="btn primary" id="dlBtn">Scarica PDF</button>
     </div>`;
+  const dl=document.getElementById("dlBtn");
+  if(dl) dl.addEventListener("click", ()=>downloadPdf(v.code));
+}
+
+async function downloadPdf(code){
+  const btn=document.getElementById("dlBtn");
+  const el=document.getElementById("voucher");
+  if(!el) return;
+  const old = btn ? btn.textContent : "";
+  if(btn){ btn.textContent="Preparo…"; btn.disabled=true; }
+  try{
+    const canvas = await html2canvas(el, { scale:2, backgroundColor:null, useCORS:true });
+    const img = canvas.toDataURL("image/png");
+    const { jsPDF } = window.jspdf;
+    // PDF su misura del voucher (mantiene le proporzioni)
+    const pdf = new jsPDF({ orientation: canvas.width>canvas.height?"l":"p", unit:"pt", format:[canvas.width, canvas.height] });
+    pdf.addImage(img, "PNG", 0, 0, canvas.width, canvas.height);
+    pdf.save("voucher-"+(code||"regalo")+".pdf");
+  }catch(e){
+    // fallback: scarica l'immagine PNG (sempre funzionante su mobile)
+    try{
+      const canvas = await html2canvas(el, { scale:2, backgroundColor:null, useCORS:true });
+      const a=document.createElement("a"); a.href=canvas.toDataURL("image/png"); a.download="voucher-"+(code||"regalo")+".png"; a.click();
+    }catch(_){ alert("Impossibile generare il file. Fai uno screenshot del voucher."); }
+  }
+  if(btn){ btn.textContent=old||"Scarica PDF"; btn.disabled=false; }
 }
 </script>
 </body>
