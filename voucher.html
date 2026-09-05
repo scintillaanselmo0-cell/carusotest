@@ -115,7 +115,7 @@ function render(v){
       ${used?`<div class="used">Voucher già utilizzato</div>`:""}
     </div>
     <div class="actions no-print">
-      <button class="btn primary" id="dlBtn">Scarica PDF</button>
+      <button class="btn primary" id="dlBtn">Scarica / Condividi</button>
     </div>`;
   const dl=document.getElementById("dlBtn");
   if(dl) dl.addEventListener("click", ()=>downloadPdf(v.code));
@@ -127,22 +127,37 @@ async function downloadPdf(code){
   if(!el) return;
   const old = btn ? btn.textContent : "";
   if(btn){ btn.textContent="Preparo…"; btn.disabled=true; }
+  const fileName = "voucher-"+(code||"regalo")+".pdf";
   try{
     const canvas = await html2canvas(el, { scale:2, backgroundColor:null, useCORS:true });
-    const img = canvas.toDataURL("image/png");
     const { jsPDF } = window.jspdf;
-    // PDF su misura del voucher (mantiene le proporzioni)
     const pdf = new jsPDF({ orientation: canvas.width>canvas.height?"l":"p", unit:"pt", format:[canvas.width, canvas.height] });
-    pdf.addImage(img, "PNG", 0, 0, canvas.width, canvas.height);
-    pdf.save("voucher-"+(code||"regalo")+".pdf");
+    pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, canvas.width, canvas.height);
+    const blob = pdf.output("blob");
+    const file = new File([blob], fileName, { type:"application/pdf" });
+
+    // su telefono: apre il foglio "Condividi/Salva" nativo
+    if(navigator.canShare && navigator.canShare({ files:[file] })){
+      try{
+        await navigator.share({ files:[file], title:"Voucher regalo" });
+        if(btn){ btn.textContent=old||"Scarica / Condividi"; btn.disabled=false; }
+        return;
+      }catch(shareErr){
+        // se l'utente annulla la condivisione, non forziamo il download
+        if(shareErr && shareErr.name==="AbortError"){ if(btn){ btn.textContent=old||"Scarica / Condividi"; btn.disabled=false; } return; }
+      }
+    }
+    // su PC (o se la condivisione non è supportata): download classico
+    const url = URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download=fileName; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
   }catch(e){
-    // fallback: scarica l'immagine PNG (sempre funzionante su mobile)
     try{
       const canvas = await html2canvas(el, { scale:2, backgroundColor:null, useCORS:true });
       const a=document.createElement("a"); a.href=canvas.toDataURL("image/png"); a.download="voucher-"+(code||"regalo")+".png"; a.click();
     }catch(_){ alert("Impossibile generare il file. Fai uno screenshot del voucher."); }
   }
-  if(btn){ btn.textContent=old||"Scarica PDF"; btn.disabled=false; }
+  if(btn){ btn.textContent=old||"Scarica / Condividi"; btn.disabled=false; }
 }
 </script>
 </body>
