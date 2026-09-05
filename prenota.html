@@ -227,6 +227,10 @@ function renderApptForm(){
           <input id="phone" class="f" type="tel" placeholder="350 000 0000" autocomplete="tel" inputmode="tel" />
         </div>
         <div class="grp">
+          <label class="lab" for="email">Email</label>
+          <input id="email" class="f" type="email" placeholder="mario@esempio.it" autocomplete="email" inputmode="email" />
+        </div>
+        <div class="grp">
           <label class="lab" for="notes">Note <span style="color:var(--muted);font-weight:500">(facoltative)</span></label>
           <textarea id="notes" class="f" placeholder="Richieste particolari…"></textarea>
         </div>
@@ -300,6 +304,7 @@ async function apptSubmit(){
   const msg=$("#formMsg"); msg.style.display="none";
   const name=$("#name").value.trim();
   const phone=$("#phone").value.trim();
+  const email=$("#email").value.trim();
   const date=$("#date").value;
   const time=$("#time").value;
   const notes=$("#notes").value.trim();
@@ -310,6 +315,7 @@ async function apptSubmit(){
   if(!time) return fail("Scegli un orario libero.");
   if(!name) return fail("Inserisci il tuo nome.");
   if(!/\d{6,}/.test(phone.replace(/\D/g,""))) return fail("Inserisci un numero di telefono valido.");
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail("Inserisci un'email valida per la conferma.");
   if(!consent) return fail("Serve il consenso privacy per inviare la richiesta.");
 
   const btn=$("#submit"); btn.disabled=true; btn.textContent="Attendi…";
@@ -317,7 +323,7 @@ async function apptSubmit(){
   // servizio a pagamento -> Stripe Checkout (l'appuntamento nasce dopo il pagamento)
   if(SERVICE.price_cents){
     const { data, error } = await sb.functions.invoke("crea-checkout",{
-      body: { slug:CLIENT_SLUG, service_key:SERVICE_KEY, name, phone, date, time,
+      body: { slug:CLIENT_SLUG, service_key:SERVICE_KEY, name, phone, email, date, time,
               consent, notes: notes||null, return_url: location.href }
     });
     if(error){ btn.disabled=false; btn.textContent="Vai al pagamento"; return fail("Errore nel pagamento. Riprova o chiamaci."); }
